@@ -1,0 +1,9 @@
+yfinance
+pandas
+joblib
+fastapi
+uvicorn
+scikit-learn
+pydantic
+loguru
+

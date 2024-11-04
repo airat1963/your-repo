@@ -1,0 +1,32 @@
+# Виртуальные окружения
+venv/
+.venv/
+env/
+.myenv/
+
+# Файлы конфигурации IDE
+.idea/
+.vscode/
+
+# Файлы логов
+logs/
+*.log
+
+# Файлы баз данных
+*.db
+*.sqlite
+
+# Файлы кэша и временные файлы
+__pycache__/
+*.pyc
+
+# Файлы конфигурации Docker
+.dockerignore
+
+# Файлы конфигурации CI/CD
+.gitlab-ci.yml
+.travis.yml
+
+# Другие файлы и папки
+*.DS_Store
+*.env

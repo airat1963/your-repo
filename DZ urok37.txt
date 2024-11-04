@@ -1,0 +1,179 @@
+DZ urok37  
+
+Для прогноза цены закрытия индекса S&P 500 с помощью временных рядов мы можем использовать алгоритмы машинного обучения, такие как ARIMA, LSTM или Prophet. Вот пошаговая реализация, где API будет предсказывать будущие значения на основе исторических данных, полученных из Yahoo Finance.
+
+### Шаг 1: Подготовка данных для модели
+1. **Установите необходимые библиотеки**:
+   ```bash
+   pip install yfinance pandas joblib fastapi uvicorn scikit-learn
+   ```
+
+2. **Загрузка и предобработка данных**:
+   Используем `yfinance` для загрузки данных S&P 500. Сохраним модель прогноза с помощью библиотеки `joblib`.
+
+   ```python
+   import yfinance as yf
+   import pandas as pd
+   from sklearn.linear_model import LinearRegression
+   import numpy as np
+   import joblib
+
+   # Загружаем данные S&P 500 за последний год
+   data = yf.download('^GSPC', start='2023-01-01', end='2024-01-01')
+   data = data[['Close']]
+
+   # Создаем признаки для модели - даты преобразуем в последовательные индексы
+   data['Day'] = np.arange(len(data))
+
+   X = data[['Day']]
+   y = data['Close']
+
+   # Обучаем простую линейную регрессию (можно заменить на более сложную модель)
+   model = LinearRegression()
+   model.fit(X, y)
+
+   # Сохраняем модель
+   joblib.dump(model, 'sp500_model.joblib')
+   ```
+
+### Шаг 2: Создание REST API с FastAPI
+Теперь обернем модель в FastAPI, чтобы предсказывать цену закрытия для заданного дня в будущем.
+
+1. **Создайте `app.py`** для REST API:
+   ```python
+   from fastapi import FastAPI
+   from pydantic import BaseModel
+   import joblib
+
+   app = FastAPI()
+
+   # Загружаем модель
+   model = joblib.load("sp500_model.joblib")
+
+   class PredictionRequest(BaseModel):
+       day: int  # Прогнозируемая дата в днях от последней даты
+
+   @app.post("/predict")
+   def predict(request: PredictionRequest):
+       day = request.day
+       prediction = model.predict([[day]])
+       return {"predicted_close": prediction[0]}
+   ```
+
+2. **Запустите приложение локально**:
+   ```bash
+   uvicorn app:app --host 0.0.0.0 --port 8000
+   ```
+
+### Шаг 3: Подготовка Docker-образа
+1. **Создайте Dockerfile** для вашего приложения:
+   ```dockerfile
+   FROM python:3.9-slim
+   WORKDIR /app
+   COPY . /app
+   RUN pip install fastapi uvicorn joblib scikit-learn
+   EXPOSE 8000
+   CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+   ```
+
+2. **Соберите и протестируйте Docker-образ**:
+   ```bash
+   docker build -t <your-dockerhub-username>/sp500-predictor:latest .
+   docker run -p 8000:8000 <your-dockerhub-username>/sp500-predictor:latest
+   ```
+
+### Шаг 4: Настройка CI/CD с GitHub Actions
+Создайте workflow `.github/workflows/deploy.yml`:
+
+```yaml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install fastapi uvicorn joblib scikit-learn
+
+      - name: Run tests
+        run: pytest  # добавьте тесты для модели
+
+      - name: Build Docker image
+        run: docker build -t <your-dockerhub-username>/sp500-predictor:latest .
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push Docker image
+        run: docker push <your-dockerhub-username>/sp500-predictor:latest
+```
+
+### Шаг 5: Деплой в Kubernetes на Yandex Cloud
+1. **Создайте манифест для Kubernetes** (`k8s-deployment.yaml`):
+   ```yaml
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     name: sp500-api-deployment
+   spec:
+     replicas: 3
+     selector:
+       matchLabels:
+         app: sp500-api
+     template:
+       metadata:
+         labels:
+           app: sp500-api
+       spec:
+         containers:
+         - name: sp500-api
+           image: <your-dockerhub-username>/sp500-predictor:latest
+           ports:
+           - containerPort: 8000
+
+   ---
+   apiVersion: v1
+   kind: Service
+   metadata:
+     name: sp500-api-service
+   spec:
+     selector:
+       app: sp500-api
+     ports:
+       - protocol: TCP
+         port: 80
+         targetPort: 8000
+     type: LoadBalancer
+   ```
+
+2. **Подключитесь к Kubernetes и примените манифест**:
+   ```bash
+   yc managed-kubernetes cluster get-credentials <cluster-name> --external
+   kubectl apply -f k8s-deployment.yaml
+   ```
+
+### Шаг 6: Тестирование через публичный API
+После получения внешнего IP для `sp500-api-service`, протестируйте API:
+```bash
+curl -X POST "<external-ip>/predict" -H "Content-Type: application/json" -d '{"day": 365}'
+```
+
+Эти шаги позволят создать предсказатель для временных рядов S&P 500, завернутый в REST API, автоматически деплоящийся через CI/CD в Kubernetes на Yandex Cloud.

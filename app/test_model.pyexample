@@ -1,0 +1,14 @@
+# test_model.py
+
+from model import predict_price  # Импортируем функцию предсказания из файла model.py
+
+def test_predict_price():
+    # Проверяем, что функция возвращает число для разных входных данных
+    days = [1, 5, 10, 20]
+    for day in days:
+        prediction = predict_price(day)
+        print(f"Prediction for day {day}: {prediction}, type: {type(prediction)}")
+        assert isinstance(prediction, float), f"Prediction for day {day} is not a float"
+
+if __name__ == "__main__":
+    test_predict_price()
